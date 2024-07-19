@@ -219,13 +219,12 @@ def rebind(user_data: dict):
 def logger():
     """
     * starts the logging of information, but it's always running
+        This includes restarting input in the case of a mistake
     "k/h" denote a damaged/broken kevlar and helmet respectively
     [0-9] denote the user's cash pool
     "l" denotes if you lived the previous round, modifying prioty buying system
     + ends the logger and returns the string of information
-
-    
-    - clears the logger but keeps it running in the case of misinput
+    / ends the program as a whole so you can leave
     """
 
 def randomize_loop(user_data, team, mode):
@@ -266,36 +265,47 @@ def randomize_loop(user_data, team, mode):
     6th purchase:  50%
     7th purchase:  45%
     8th purchase:  40%
-    
     """
 
     pass
 
 def start_randomizer(user_data):
     print(user_data)
+    os.system('cls')
     while True:
-        os.system('cls')
         print("Select A Team")
         print("\t1.   CT")
         print("\t2.    T")
         print("\tQ. Quit")
-        choice = input('\t> ').lower()
+        team = input('\t> ').lower()
 
-        if choice in ['t', 'ct', '1', '2']:
+        if team in ['t', 'ct', '1', '2']:
             os.system('cls')
-            print("Select A Mode")
-            print("\t1.      Casual")
-            print("\t2. Competitive")
-            print("\tB.        Back")
-            print("\tQ.        Quit")
-            choice = input('\t> ').lower()
-            if choice == 'b': continue
-            if choice == 'q': return
-            randomize_loop(user_data, choice)
+            while True:
+                print("Select A Mode")
+                print("\t1.      Casual")
+                print("\t2. Competitive")
+                print("\tB.        Back")
+                print("\tQ.        Quit")
+                game = input('\t> ').lower()
+                if game in ['1', '2', 'casual', 'competitive']:
+                    
+                    # Start the loop
+                    randomize_loop(user_data, team, game)
+                    if input('Continue Running? (y/n) > ').lower() == 'n':
+                        return
+                    os.system('cls')
+                    break
+                os.system('cls')
+                if game == 'b': break
+                if game == 'q': return
+                else:
+                    print('Invalid option!')
         
-        elif choice == 'q': return
-        
-        print('Invalid Choice!')
+        elif team == 'q': return
+        else:
+            os.system('cls')
+            print('Invalid Choice!')
 
 def main():
 
