@@ -346,65 +346,64 @@ def randomize_loop(user_data, team, mode):
     }
     while True:
         # User value = money and data regarding what they can afford
-        user_value = logger()
+        # user_value = logger()
         
         # Test strings to work with
-        user_values = [
-            '*16000'#, '*2500', '*7250', '*3950', '*4700', '50',
-            # '*16000khl', '*k2500', '*7250l', '*hk3950', '*47h0l0'
-        ]
-        for user_value in user_values:
-            buy_kevlar = True if 'k' in user_value else False
-            buy_helmet = True if 'h' in user_value else False
-            lived      = True if 'l' in user_value else False
-            user_value = user_value.translate(str.maketrans('', '', 'khl*'))
-            balance = int(user_value)
+        user_value = '*10000'
+        
+        # for user_value in user_values:
+        buy_kevlar = True if 'k' in user_value else False
+        buy_helmet = True if 'h' in user_value else False
+        lived      = True if 'l' in user_value else False
+        user_value = user_value.translate(str.maketrans('', '', 'khl*'))
+        balance = int(user_value)
+        
+        # Reset current loadout if they didn't live
+        if not lived:
+            current_loadout = {key: [] for key in current_loadout}
+
+        rates = [1, 0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
+        if mode == 'casual': rates = rates[:6]
+        elif team == 'ct': rates = rates[:9]
+        elif team == 't': rates = rates[:8]
+
+        # Determining max buys based on mode and team
+        print('What can I buy? hmmmMmM')
+        grenade_slots = 3 if mode == 'casual' else 4
+        grenade_slots -= len(current_loadout['grenades'])
+        for rate in rates:
+
+            # No more buying :(
+            if random.random() > rate: break
+
+            # Choosing a random item (weights can be applied later)
+            possible_items = get_possible_items(user_data, current_loadout, team, mode, balance, buy_helmet, buy_kevlar, grenade_slots)
             
-            # Reset current loadout if they didn't live
-            if not lived:
-                current_loadout = {key: [] for key in current_loadout}
+            # Broke ass bitch
+            if not possible_items: break
 
-            rates = [1, 0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
-            if mode == 'casual': rates = rates[:6]
-            elif team == 'ct': rates = rates[:9]
-            elif team == 't': rates = rates[:8]
-
-            # Determining max buys based on mode and team
-            print('What can I buy? hmmmMmM')
-            grenade_slots = 3 if mode == 'casual' else 4
-            grenade_slots -= len(current_loadout['grenades'])
-            for rate in rates:
-
-                # No more buying :(
-                if random.random() > rate: break
-
-                # Choosing a random item (weights can be applied later)
-                possible_items = get_possible_items(user_data, current_loadout, team, mode, balance, buy_helmet, buy_kevlar, grenade_slots)
-                
-                # Broke ass bitch
-                if not possible_items: break
-
-                # Buy your shit
-                random_category = random.choice(list(possible_items.keys()))
-                print(f'Bought {random_item} from {random_category}. New Balance: ${balance:,.2f}')
-                
-                if random_category == 'grenades':
-                    # Filter grenades so we don't buy duplicates
-                    grenade_blacklist = []
-                    first_flash_found = False
-                    for grenade in current_loadout['grenades']:
-                        if grenade == 'flashbang' and not first_flash_found and mode == 'competitive':
-                            first_flash_found = True
-                        else: grenade_blacklist.append(grenade)
-                    random_item = random.choice(list(possible_items[random_category]))
-                    current_loadout[random_category].append(random_item)
-                    grenade_slots -= 1
-                else:
-                    random_item = random.choice(list(possible_items[random_category]))
-                    current_loadout[random_category].append(random_item)
-                balance -= weapon_data[random_item]
-
-
+            # Buy your shit
+            random_category = random.choice(list(possible_items.keys()))
+            
+            if random_category == 'grenades':
+                # Filter grenades so we don't buy duplicates
+                grenade_blacklist = []
+                first_flash_found = False
+                for grenade in current_loadout['grenades']:
+                    if grenade == 'flashbang' and not first_flash_found and mode == 'competitive':
+                        first_flash_found = True
+                    else: grenade_blacklist.append(grenade)
+                random_item = random.choice([i for i in list(possible_items[random_category]) if i not in grenade_blacklist])
+                current_loadout[random_category].append(random_item)
+                grenade_slots -= 1
+            else:
+                random_item = random.choice(list(possible_items[random_category]))
+                current_loadout[random_category].append(random_item)
+            balance -= weapon_data[random_item]
+            print(f'Bought {random_item} from {random_category}. New Balance: ${balance:,.2f}')
+        
+        # Commence the autobuyer
+        buy_items(user_data, current_loadout, team)
         break
 
 def start_randomizer(user_data):
@@ -457,6 +456,34 @@ def start_randomizer(user_data):
         else:
             os.system('cls')
             print('Invalid Choice!')
+
+def find_weapon_slot(user_data, team, category, item_to_compare):
+    for i, item in enumerate(user_data[team][category]):
+        if item == item_to_compare:
+            return i+1
+
+def press_key(key):
+    import keyboard
+    keyboard.press(key)
+    time.sleep(.05)
+    keyboard.release(key)
+    time.sleep(.5)
+
+def buy_items(user_data, purchaseables, team):
+    import keyboard
+    time.sleep(4)
+    press_key('b')
+    print('b')
+    for i, category in enumerate(purchaseables):
+        for item in purchaseables[category]:
+            weapon_slot = find_weapon_slot(user_data, team, category, item)
+            press_key(i+2)
+            print(i+2)
+            press_key(weapon_slot+1)
+            print(weapon_slot+1)
+
+    keyboard.press('esc')
+    keyboard.release('esc')
 
 def main():
 
@@ -525,89 +552,3 @@ main()
 #         from pynput import keyboard
 #         with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
 #             listener.join()
-        
-#         if quit[0]:
-#             return
-
-#         
-#             import keyboard
-#             for i in range(1, 5):
-#                 if i == 4: # Grenades
-#                     for j in range(4):
-#                         keyboard.press(str(i))
-#                         keyboard.release(str(i))
-#                         time.sleep(.05)
-#                         keyboard.press("g")
-#                         keyboard.release("g")
-#                         time.sleep(.05)
-#                 else:
-#                     keyboard.press(str(i))
-#                     keyboard.release(str(i))
-#                     time.sleep(.05)
-#                     keyboard.press("g")
-#                     keyboard.release("g")
-#                     time.sleep(.05)
-
-#             while len(purchasables) > 0:
-#                 buy = random.choice(purchasables)
-#                 chance = random.random()
-#                 if buy != 'grenade':
-#                     purchasables.remove(buy)
-
-#                 # 50% chance to buy that weapon
-#                 if chance > .5:
-
-#                     if buy == 'pistol':
-#                         buy = random.choice(list(pistol))
-#                         balance -= pistol[buy]
-                        
-#                     elif buy == 'heavy':
-#                         buy = random.choice(list(heavy))
-#                         balance -= heavy[buy]
-#                         if 'smg' in purchasables:   purchasables.remove('smg')
-#                         if 'rifle' in purchasables: purchasables.remove('rifle')
-                        
-#                     elif buy == 'smg':
-#                         buy = random.choice(list(smg))
-#                         balance -= smg[buy]
-#                         if 'heavy' in purchasables: purchasables.remove('heavy')
-#                         if 'rifle' in purchasables: purchasables.remove('rifle')
-                        
-#                     elif buy == 'rifle':
-#                         buy = random.choice(list(rifle))
-#                         balance -= rifle[buy]
-#                         if 'smg' in purchasables:   purchasables.remove('smg')
-#                         if 'heavy' in purchasables: purchasables.remove('heavy')
-                        
-#                     elif buy == 'equipment':
-#                         buy = random.choice(list(equipment))
-#                         balance -= equipment[buy]
-                        
-#                     elif buy == 'grenade':
-#                         buy = random.choice(list(grenade))
-#                         balance -= grenade[buy]
-#                         del grenade[buy]
-#                         grenade_slots -= 1
-#                         chance = random.random()
-#                         if chance > .75 or grenade == {} or grenade_slots == 0:
-#                             purchasables.remove('grenade')
-
-#                     import keyboard
-
-#                     i = buy.split(' ')
-#                     keyboard.press('b')
-#                     keyboard.release('b')
-#                     time.sleep(.05)
-#                     keyboard.press(i[1])
-#                     keyboard.release(i[1])
-#                     time.sleep(.05)
-#                     keyboard.press(i[2])
-#                     keyboard.release(i[2])
-#                     time.sleep(.05)
-#                     keyboard.press('esc')
-#                     keyboard.release('esc')
-#                     time.sleep(.05)
-#                     if i[1] == '6' or i[1] == '5':
-#                         keyboard.press('esc')
-#                         keyboard.release('esc')
-#                         time.sleep(.05)
