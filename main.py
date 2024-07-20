@@ -246,8 +246,67 @@ def logger():
     "l" denotes if you lived the previous round, modifying prioty buying system
     + ends the logger and returns the string of information
     / ends the program as a whole so you can leave
+    "Enter" submits your answer and will queue the auto-buyer
+    "Backspace" removes the last entry in your value.
+        This only applies if you have started it with an *
+
+    This also helps if you type the value in the chat bar and enter to submit
     """
 
+    from pynput import keyboard
+    class CustomListener():
+        def __init__(self):
+            self.user_value = ''
+            self.running = True
+
+        def run(self):
+            while self.running:
+                with keyboard.Listener(on_press=self.on_press, on_release=self.on_release) as listener:
+                    listener.join()
+        
+        # only add k h and l once
+        def on_press(self, key):
+            if not self.user_value: return
+            if not self.user_value[0] == '*': return
+            if str(key) == "'1'" or str(key) == "<97>":  self.user_value += '1'
+            if str(key) == "'2'" or str(key) == "<98>":  self.user_value += '2'
+            if str(key) == "'3'" or str(key) == "<99>":  self.user_value += '3'
+            if str(key) == "'4'" or str(key) == "<100>": self.user_value += '4'
+            if str(key) == "'5'" or str(key) == "<101>": self.user_value += '5'
+            if str(key) == "'6'" or str(key) == "<102>": self.user_value += '6'
+            if str(key) == "'7'" or str(key) == "<103>": self.user_value += '7'
+            if str(key) == "'8'" or str(key) == "<104>": self.user_value += '8'
+            if str(key) == "'9'" or str(key) == "<105>": self.user_value += '9'
+            if str(key) == "'0'" or str(key) == "<96>":  self.user_value += '0'
+            if str(key) == "'h'" and 'h' not in self.user_value:  self.user_value += 'h'
+            if str(key) == "'k'" and 'k' not in self.user_value:  self.user_value += 'k'
+            if str(key) == "'l'" and 'l' not in self.user_value:  self.user_value += 'l'
+            print(self.user_value)
+
+        def on_release(self, key):
+            
+            # Start the string
+            if str(key) == "'*'":
+                self.user_value = '*'
+            
+            # Stop listener
+            elif str(key) == 'Key.enter' and self.user_value:
+                self.running = False
+                return False
+
+            elif str(key) == "'/'":
+                self.user_value = 'stop'
+                self.running = False
+                return False
+
+            # Remove a character
+            elif str(key) == "Key.backspace" and self.user_value:
+                self.user_value = self.user_value[:-1]
+
+    listener = CustomListener()
+    listener.run()
+    return listener.user_value
+    
 def get_category_items(user_data, team, mode, category):
     """
     grab all items based on a category,
@@ -346,11 +405,14 @@ def randomize_loop(user_data, team, mode):
     }
     while True:
         # User value = money and data regarding what they can afford
-        # user_value = logger()
+        user_value = logger()
         
-        # Test strings to work with
-        user_value = '*10000'
-        
+        # No input detected
+        if len(user_value) <= 1: continue
+
+        # User wants to close the application
+        if user_value == 'stop': return
+
         # for user_value in user_values:
         buy_kevlar = True if 'k' in user_value else False
         buy_helmet = True if 'h' in user_value else False
@@ -362,19 +424,18 @@ def randomize_loop(user_data, team, mode):
         if not lived:
             current_loadout = {key: [] for key in current_loadout}
 
-        rates = [1, 0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
+        rates = [0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
         if mode == 'casual': rates = rates[:6]
         elif team == 'ct': rates = rates[:9]
         elif team == 't': rates = rates[:8]
 
         # Determining max buys based on mode and team
-        print('What can I buy? hmmmMmM')
         grenade_slots = 3 if mode == 'casual' else 4
         grenade_slots -= len(current_loadout['grenades'])
-        for rate in rates:
 
-            # No more buying :(
-            if random.random() > rate: break
+        # First buy is free, but it will
+        # stop generating once we don't get one.
+        for rate in rates:
 
             # Choosing a random item (weights can be applied later)
             possible_items = get_possible_items(user_data, current_loadout, team, mode, balance, buy_helmet, buy_kevlar, grenade_slots)
@@ -393,7 +454,16 @@ def randomize_loop(user_data, team, mode):
                     if grenade == 'flashbang' and not first_flash_found and mode == 'competitive':
                         first_flash_found = True
                     else: grenade_blacklist.append(grenade)
-                random_item = random.choice([i for i in list(possible_items[random_category]) if i not in grenade_blacklist])
+                valid_grenades = [i for i in list(possible_items[random_category]) if i not in grenade_blacklist]
+                
+                # No valid grenades found
+                if not valid_grenades:
+                    # Keep trying if there's something else, otherwise, stop
+                    if len(possible_items.keys()) > 1: continue
+                    else: break
+                
+                # Buy the grenade because we have to!!!
+                random_item = random.choice(valid_grenades)
                 current_loadout[random_category].append(random_item)
                 grenade_slots -= 1
             else:
@@ -401,10 +471,12 @@ def randomize_loop(user_data, team, mode):
                 current_loadout[random_category].append(random_item)
             balance -= weapon_data[random_item]
             print(f'Bought {random_item} from {random_category}. New Balance: ${balance:,.2f}')
+
+            # No more buying :(
+            if random.random() > rate: break
         
         # Commence the autobuyer
         buy_items(user_data, current_loadout, team)
-        break
 
 def start_randomizer(user_data):
     
@@ -467,23 +539,22 @@ def press_key(key):
     keyboard.press(key)
     time.sleep(.05)
     keyboard.release(key)
-    time.sleep(.5)
+    time.sleep(.05)
 
 def buy_items(user_data, purchaseables, team):
-    import keyboard
-    time.sleep(4)
     press_key('b')
-    print('b')
     for i, category in enumerate(purchaseables):
+        if not purchaseables[category]: continue
+        press_key(i+2)
         for item in purchaseables[category]:
             weapon_slot = find_weapon_slot(user_data, team, category, item)
-            press_key(i+2)
-            print(i+2)
             press_key(weapon_slot+1)
-            print(weapon_slot+1)
 
-    keyboard.press('esc')
-    keyboard.release('esc')
+    press_key('esc')
+
+    # Needed because you don't exit out of grenades when clicking on it :/
+    if purchaseables['grenades']:
+        press_key('esc')
 
 def main():
 
@@ -504,51 +575,3 @@ def main():
             print('Invalid Choice!')
 
 main()
-
-#     while True:
-#         quit = [False]
-
-#         def on_press(key):
-#             try:
-#                 if check_balance == [] and str(key) == "'y'": check_balance.append('y')
-#                 elif check_balance != []:
-#                     if check_balance[0] == 'y' and (str(key) == '<96>' or str(key) == "'0'"):
-#                         check_balance.append(0)
-#                     elif check_balance[0] == 'y' and (str(key) == '<97>' or str(key) == "'1'"):
-#                         check_balance.append(1)
-#                     elif check_balance[0] == 'y' and (str(key) == '<98>' or str(key) == "'2'"):
-#                         check_balance.append(2)
-#                     elif check_balance[0] == 'y' and (str(key) == '<99>' or str(key) == "'3'"):
-#                         check_balance.append(3)
-#                     elif check_balance[0] == 'y' and (str(key) == '<100>' or str(key) == "'4'"):
-#                         check_balance.append(4)
-#                     elif check_balance[0] == 'y' and (str(key) == '<101>' or str(key) == "'5'"):
-#                         check_balance.append(5)
-#                     elif check_balance[0] == 'y' and (str(key) == '<102>' or str(key) == "'6'"):
-#                         check_balance.append(6)
-#                     elif check_balance[0] == 'y' and (str(key) == '<103>' or str(key) == "'7'"):
-#                         check_balance.append(7)
-#                     elif check_balance[0] == 'y' and (str(key) == '<104>' or str(key) == "'8'"):
-#                         check_balance.append(8)
-#                     elif check_balance[0] == 'y' and (str(key) == '<105>' or str(key) == "'9'"):
-#                         check_balance.append(9)
-#             except AttributeError:
-#                 pass
-
-#         def on_release(key):
-#             if str(key) == 'Key.enter' and len(check_balance) > 1:
-#                 # Stop listener
-#                 check_balance.pop(0)
-#                 return False
-#             elif str(key) == "'-'":
-#                 quit[0] = True
-#                 return False
-#             elif str(key) == "'*'":
-#                 for _ in range(1, len(check_balance)):
-#                     check_balance.pop()
-                
-#             elif str(key) == "Key.backspace" and len(check_balance) > 0: check_balance.pop()
-
-#         from pynput import keyboard
-#         with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-#             listener.join()
