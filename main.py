@@ -37,6 +37,7 @@ weapon_data = {
     'famas': 2050,
     'm4a1-s': 2900,
     'm4a4': 3000,
+    'aug': 3300,
     'scar-20': 5000,
     'ak-47': 2700,
     'g3sg1': 5000,
@@ -76,6 +77,26 @@ team_data = {
         'grenades': ['molotov']
     }
 }
+
+def data_fully_populated(user_data):
+    """
+    Return Dictionary of all information needed so
+    that the user knows what they need to fill out
+    """
+    unpopulated = {}
+    for team in user_data:
+        for weapon_genre in user_data[team]:
+            if weapon_genre in ['equipment', 'grenades']: continue
+            total = 0
+            for _ in user_data[team][weapon_genre]:
+                total += 1
+            if total != 5:
+                if not unpopulated.get(team):
+                    unpopulated[team] = [weapon_genre]
+                else:
+                    unpopulated[team].append(weapon_genre)
+
+    return unpopulated
 
 def pick_weapon(user_data, team, weapon_type):
 
@@ -227,6 +248,52 @@ def logger():
     / ends the program as a whole so you can leave
     """
 
+def get_category_items(user_data, team, mode, category):
+    """
+    grab all items based on a category,
+    mode and team around the user's loadout
+    """
+    all_items = user_data[team][category][:]
+
+    # Filtering out mode-specific buys
+    if category == 'equipment' and mode == 'casual':
+        all_items.remove('kevlar vest')
+        all_items.remove('kevlar & helmet')
+        if team == 'ct': all_items.remove('defuse kit')
+    return all_items
+
+def get_possible_items(user_data, current_loadout, team, mode, balance, buy_helmet, buy_kevlar, grenade_slots):
+    """
+    based on user data, find all affordable items
+    """
+    # Finding valid categories to buy from
+    valid_categories = []
+    for category in current_loadout:
+        if not current_loadout[category]:
+            valid_categories.append(category)
+        else:
+            # Check grenade slots
+            if category == 'grenades' and grenade_slots > 0:
+                valid_categories.append(category)
+
+    # Removing primary guns from the auto-buyer if they already have one
+    if 'mid-tier' in valid_categories and not 'rifles' in valid_categories:
+        valid_categories.remove('mid-tier')
+    elif not 'mid-tier' in valid_categories and 'rifles' in valid_categories:
+        valid_categories.remove('rifles')
+
+    valid_buys = {}
+    for category in valid_categories:
+        all_items = get_category_items(user_data, team, mode, category)
+        if category == 'equipment':
+            if not buy_helmet and 'kevlar & helmet' in all_items: all_items.remove('kevlar & helmet')
+            if not buy_kevlar and 'kevlar vest' in all_items: all_items.remove('kevlar vest')
+        affordables = [i for i in all_items if weapon_data[i] <= balance]
+        if affordables:
+            valid_buys[category] = affordables
+
+    return valid_buys
+
 def randomize_loop(user_data, team, mode):
     """
     user_data -> weapon loadout
@@ -247,13 +314,13 @@ def randomize_loop(user_data, team, mode):
     
     PURCHASABLES (w/ Weights of Priority)
     ==========================================================
-    TEAM---------------------------------------------| CT ||   T
-    Primary                                          | 38 || 40.00%
-    Secondary                                        | 14 || 20.00%
-    Defuse Kit (if applicable)                       | 10 || 00.00%
-    Zeus                                             | 05 || 05.00%
-    Armor (Kevlar, or kevlar and helmet, never both) | 20 || 20.00%
-    Grenades (Up to 4 grenade purchases)             | 13 || 15.00%
+    TEAM---------------------------------------------| CT  ||  T
+    Primary                                          | 38% || 40%
+    Secondary                                        | 14% || 20%
+    Defuse Kit (if applicable)                       | 10% || 00%
+    Zeus                                             | 05% || 05%
+    Armor (Kevlar, or kevlar and helmet, never both) | 20% || 20%
+    Grenades (Up to 4 grenade purchases)             | 13% || 15%
 
     RATES (if you can afford it)
     ==========================================================
@@ -262,15 +329,98 @@ def randomize_loop(user_data, team, mode):
     3rd purchase:  70%
     4th purchase:  60%
     5th purchase:  55%
-    6th purchase:  50%
+    6th purchase:  50% Casual CT/T Max
     7th purchase:  45%
-    8th purchase:  40%
-    """
+    8th purchase:  40% Competitive T Max
+    9th purchase:  35% Competitive CT Max
 
-    pass
+    Buy using the category number according by index and the gun by index YTASYUDHG
+    """
+    # Used if the user lives and we want to know what they already likely have
+    current_loadout = {
+        'equipment': [],
+        'pistols':   [],
+        'mid-tier':  [],
+        'rifles':    [],
+        'grenades':  []
+    }
+    while True:
+        # User value = money and data regarding what they can afford
+        user_value = logger()
+        
+        # Test strings to work with
+        user_values = [
+            '*16000'#, '*2500', '*7250', '*3950', '*4700', '50',
+            # '*16000khl', '*k2500', '*7250l', '*hk3950', '*47h0l0'
+        ]
+        for user_value in user_values:
+            buy_kevlar = True if 'k' in user_value else False
+            buy_helmet = True if 'h' in user_value else False
+            lived      = True if 'l' in user_value else False
+            user_value = user_value.translate(str.maketrans('', '', 'khl*'))
+            balance = int(user_value)
+            
+            # Reset current loadout if they didn't live
+            if not lived:
+                current_loadout = {key: [] for key in current_loadout}
+
+            rates = [1, 0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
+            if mode == 'casual': rates = rates[:6]
+            elif team == 'ct': rates = rates[:9]
+            elif team == 't': rates = rates[:8]
+
+            # Determining max buys based on mode and team
+            print('What can I buy? hmmmMmM')
+            grenade_slots = 3 if mode == 'casual' else 4
+            grenade_slots -= len(current_loadout['grenades'])
+            for rate in rates:
+
+                # No more buying :(
+                if random.random() > rate: break
+
+                # Choosing a random item (weights can be applied later)
+                possible_items = get_possible_items(user_data, current_loadout, team, mode, balance, buy_helmet, buy_kevlar, grenade_slots)
+                
+                # Broke ass bitch
+                if not possible_items: break
+
+                # Buy your shit
+                random_category = random.choice(list(possible_items.keys()))
+                print(f'Bought {random_item} from {random_category}. New Balance: ${balance:,.2f}')
+                
+                if random_category == 'grenades':
+                    # Filter grenades so we don't buy duplicates
+                    grenade_blacklist = []
+                    first_flash_found = False
+                    for grenade in current_loadout['grenades']:
+                        if grenade == 'flashbang' and not first_flash_found and mode == 'competitive':
+                            first_flash_found = True
+                        else: grenade_blacklist.append(grenade)
+                    random_item = random.choice(list(possible_items[random_category]))
+                    current_loadout[random_category].append(random_item)
+                    grenade_slots -= 1
+                else:
+                    random_item = random.choice(list(possible_items[random_category]))
+                    current_loadout[random_category].append(random_item)
+                balance -= weapon_data[random_item]
+
+
+        break
 
 def start_randomizer(user_data):
-    print(user_data)
+    
+    unfilled_data = data_fully_populated(user_data)
+    if unfilled_data:
+        print('Team Data Not Filled Out! Please rebind the following and try again.')
+        for team in unfilled_data:
+            for weapon_genre in unfilled_data[team]:
+                print(f'{team.upper()} -> {weapon_genre.upper()}')
+        input('ok... > ')
+        
+        # Restarting
+        main()
+        return
+
     os.system('cls')
     while True:
         print("Select A Team")
@@ -280,6 +430,7 @@ def start_randomizer(user_data):
         team = input('\t> ').lower()
 
         if team in ['t', 'ct', '1', '2']:
+            team = 'ct' if team == '1' else 't'
             os.system('cls')
             while True:
                 print("Select A Mode")
@@ -289,7 +440,7 @@ def start_randomizer(user_data):
                 print("\tQ.        Quit")
                 game = input('\t> ').lower()
                 if game in ['1', '2', 'casual', 'competitive']:
-                    
+                    game = 'casual' if game == "1" else 'competitive'
                     # Start the loop
                     randomize_loop(user_data, team, game)
                     if input('Continue Running? (y/n) > ').lower() == 'n':
@@ -309,79 +460,23 @@ def start_randomizer(user_data):
 
 def main():
 
-    user_data = {}
-    with open('./current_weapons_data.json', 'r') as file:
-        user_data = json.load(file)
-    rebind_crap = input('Would you like to rebind your layout? (y/n) -> ').lower()
-    if rebind_crap and rebind_crap[0] == 'y': rebind(user_data)
-    start_randomizer(user_data)
+    os.system('cls')
+    while True:
+        user_data = {}
+        with open('./current_weapons_data.json', 'r') as file:
+            user_data = json.load(file)
+        print('1. Rebind Team Layouts')
+        print('2. Start Random Auto-Buyer')
+        print('Q. Quit')
+        choice = input('Choose an Option -> ').lower()
+        if choice == '1': rebind(user_data)
+        elif choice == '2': start_randomizer(user_data)
+        elif choice == 'q': return
+        else:
+            os.system('cls')
+            print('Invalid Choice!')
 
 main()
-
-# def main():
-
-#     check_balance = []
-#     team, mode, check_deagle, check_m4a4 = '', '', '', ''
-
-#     while team != 't' and team != 'ct':
-#         team = input("ct or t: ").lower()
-#     while mode != '1' and mode != '2':
-#         mode = input("Casual or Competitive (1 / 2)? ")
-#     while check_deagle != 'y' and check_deagle != 'n':
-#         check_deagle = input("Are you using the deagle (y / n): ").lower()
-#     if team == 'ct':
-#         while check_m4a4 != 'y' and check_m4a4 != 'n':
-#             check_m4a4 = input("Are you using the m4a4 (y / n): ").lower()
-#     print("Ready For Input!")
-
-
-#     def filtered():
-#         purchasables = []
-#         unaffordables = []
-
-#         for i in pistol:
-#             if pistol[i] <= balance:
-#                 if 'pistol' not in purchasables:
-#                     purchasables.append('pistol')
-#             else:
-#                 unaffordables.append(i)
-            
-#         for i in heavy:
-#             if heavy[i] <= balance:
-#                 if 'heavy' not in purchasables:
-#                     purchasables.append('heavy')
-#             else:
-#                 unaffordables.append(i)
-
-#         for i in smg:
-#             if smg[i] <= balance:
-#                 if 'smg' not in purchasables:
-#                     purchasables.append('smg')
-#             else:
-#                 unaffordables.append(i)
-
-#         for i in rifle:
-#             if rifle[i] <= balance:
-#                 if 'rifle' not in purchasables:
-#                     purchasables.append('rifle')
-#             else:
-#                 unaffordables.append(i)
-
-#         for i in equipment:
-#             if equipment[i] <= balance:
-#                 if 'equipment' not in purchasables:
-#                     purchasables.append('equipment')
-#             else:
-#                 unaffordables.append(i)
-
-#         for i in grenade:
-#             if grenade[i] <= balance:
-#                 if 'grenade' not in purchasables:
-#                     purchasables.append('grenade')
-#             else:
-#                 unaffordables.append(i)
-        
-#         return purchasables, unaffordables
 
 #     while True:
 #         quit = [False]
@@ -434,80 +529,7 @@ main()
 #         if quit[0]:
 #             return
 
-#         if len(check_balance) > 0:
-
-#             grenade_slots = 3
-
-#             pistol =    {'B 1 1':  200, 'B 1 2':  400, 'B 1 3':  300, 'B 1 4':  500}
-#             heavy =     {'B 2 1': 1050, 'B 2 2': 2000, 'B 2 4': 5200, 'B 2 5': 1700}
-#             smg =       {'B 3 2': 1500, 'B 3 3': 1200, 'B 3 4': 2350, 'B 3 5': 1400}
-#             rifle =     {'B 4 3': 1700, 'B 4 5': 4750, 'B 4 6': 5000}
-#             equipment = {'B 5 3':  200}
-#             grenade =   {'B 6 2':   50, 'B 6 3':  200, 'B 6 4':  300, 'B 6 5':  300}
-
-#             # 50
-
-#             if team == 't':
-#                 smg['B 3 1'] = 1050
-#                 heavy['B 2 3'] = 1100
-#                 rifle['B 4 1'] = 1800
-#                 rifle['B 4 2'] = 2700
-#                 rifle['B 4 4'] = 3000
-#                 grenade['B 6 1'] = 400
-#             else:
-#                 smg['B 3 1'] = 1250
-#                 heavy['B 2 3'] = 1300
-#                 rifle['B 4 1'] = 2050
-
-#                 if check_m4a4 == 'y':
-#                     rifle['B 4 2'] = 3100
-#                 else:
-#                     rifle['B 4 2'] = 2900
-                    
-#                 rifle['B 4 4'] = 3300
-#                 if mode == '2':
-#                     equipment['B 5 4'] = 400
-
-#                 grenade['B 6 1'] = 600
-            
-#             if mode == '2':
-#                 equipment['B 5 1'] = 650
-#                 equipment['B 5 2'] = 1000
-
-#             if check_deagle == 'y':
-#                 pistol['B 1 5'] = 700
-#             else:
-#                 pistol['B 1 5'] = 600
-
-#             # ------------------------------------------------------------ #
-
-#             balance = ''
-#             for num in check_balance:
-#                 balance += str(num)
-#             balance = int(balance)
-#             check_balance = []
-
-#             purchasables, unaffordables = filtered()
-
-#             for delete in unaffordables:
-#                 if delete[2] == '1':
-#                     del pistol[delete]
-
-#                 elif delete[2] == '2':
-#                     del heavy[delete]
-
-#                 elif delete[2] == '3':
-#                     del smg[delete]
-
-#                 elif delete[2] == '4':
-#                     del rifle[delete]
-
-#                 elif delete[2] == '5':
-#                     del equipment[delete]
-
-#                 elif delete[2] == '6':
-#                     del grenade[delete]
-
+#         
 #             import keyboard
 #             for i in range(1, 5):
 #                 if i == 4: # Grenades
@@ -589,66 +611,3 @@ main()
 #                         keyboard.press('esc')
 #                         keyboard.release('esc')
 #                         time.sleep(.05)
-                    
-#                     _, unaffordables = filtered()
-
-#                     # Filters out all the weapons that I can't afford
-#                     for delete in unaffordables:
-#                         if delete[2] == '1':
-#                             del pistol[delete]
-#                             if pistol == {}:
-#                                 if 'pistol' in purchasables:
-#                                     purchasables.remove('pistol')
-
-#                         elif delete[2] == '2':
-#                             del heavy[delete]
-#                             if heavy == {}:
-#                                 if 'heavy' in purchasables:
-#                                     purchasables.remove('heavy')
-
-#                         elif delete[2] == '3':
-#                             del smg[delete]
-#                             if smg == {}:
-#                                 if 'smg' in purchasables:
-#                                     purchasables.remove('smg')
-
-#                         elif delete[2] == '4':
-#                             del rifle[delete]
-#                             if rifle == {}:
-#                                 if 'rifle' in purchasables:
-#                                     purchasables.remove('rifle')
-
-#                         elif delete[2] == '5':
-#                             del equipment[delete]
-#                             if equipment == {}:
-#                                 if 'equipment' in purchasables:
-#                                     purchasables.remove('equipment')
-
-#                         elif delete[2] == '6':
-#                             del grenade[delete]
-#                             if grenade == {}:
-#                                 if 'grenade' in purchasables:
-#                                     purchasables.remove('grenade')
-# main()
-
-# while True:
-#     again = input("Do you want to run again (y / n): ").lower()
-#     if again == 'y':
-#         main()
-#     elif again == 'n':
-#         break
-#     else:
-#         print("Looks like you had unwanted characters in the input field. Please try again!")
-
-# # TODO
-# '''
-#     Custom Loadouts
-#     UI
-#         Control which team you are on.
-#         Control which weapons are purchased.
-
-#         When start is clicked, the macros begin
-#         When the end is clicked, the script ends
-#         when the close is clicked, the program shuts down
-#     etc
-# '''
