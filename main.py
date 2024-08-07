@@ -399,6 +399,16 @@ def get_possible_items(user_data, current_loadout, team, mode, balance, buy_helm
             # Check grenade slots
             if category == 'grenades' and grenade_slots > 0:
                 valid_categories.append(category)
+            # Check equipment
+            elif category == 'equipment' and mode == 'competitive':
+
+                # You can still buy defusal
+                if 'defuse kit' not in current_loadout[category] and team == 'ct':
+                    valid_categories.append(category)
+                
+                # Can buy armor and wants to
+                elif 'kevlar & helmet' not in current_loadout[category] and 'kevlar vest' not in current_loadout[category] and (buy_helmet or buy_kevlar):
+                    valid_categories.append(category)
 
     # Removing primary guns from the auto-buyer if they already have one
     if 'mid-tier' in valid_categories and not 'rifles' in valid_categories:
@@ -409,17 +419,21 @@ def get_possible_items(user_data, current_loadout, team, mode, balance, buy_helm
     valid_buys = {}
     for category in valid_categories:
         all_items = get_category_items(user_data['teams'], team, mode, category)
-        print(f'Filtering {all_items}')
+
         # Removing items on the blacklist
         for item in all_items[:]:
-            if item in blacklist[category]:
-                all_items.remove(item)
-            else:
-                print(f'{item} not in {blacklist[category]}')
+            if item in blacklist[category]: all_items.remove(item)
+
         if category == 'equipment':
             if not buy_helmet and 'kevlar & helmet' in all_items: all_items.remove('kevlar & helmet')
             if not buy_kevlar and 'kevlar vest' in all_items: all_items.remove('kevlar vest')
-        affordables = [i for i in all_items if weapon_data[i] <= balance]
+            # Remove both armor if the user already bought one
+            if 'kevlar & helmet' in current_loadout[category] and 'kevlar vest' in all_items:
+                all_items.remove('kevlar vest')
+            if 'kevlar vest' in current_loadout[category] and 'kevlar & helmet' in all_items:
+                all_items.remove('kevlar & helmet')
+
+        affordables = [i for i in all_items if weapon_data[i] <= balance and i not in current_loadout[category]]
         if affordables:
             valid_buys[category] = affordables
 
@@ -547,7 +561,7 @@ def randomize_loop(user_data, team, mode):
 
             # No more buying :(
             if random.random() > rate: break
-        
+
         # Commence the autobuyer
         time.sleep(.1)
         buy_items(user_data['teams'], current_loadout, team)
@@ -664,6 +678,5 @@ main()
 """
 
 TODO
-Blacklist purchases,🚲
 allow the user to specify minimum purchases, priorities, etc.
 """
