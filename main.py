@@ -78,6 +78,17 @@ team_data = {
     }
 }
 
+categorized_weapons = {
+    'equipment': team_data['shared']['equipment'] + team_data['ct']['equipment'] + team_data['t']['equipment'],
+    'pistols': team_data['shared']['pistols'] + team_data['ct']['pistols'] + team_data['t']['pistols'] + team_data['ct']['starter-pistols'] + team_data['t']['starter-pistols'],
+    'mid-tier': team_data['shared']['mid-tier'] + team_data['ct']['mid-tier'] + team_data['t']['mid-tier'],
+    'rifles': team_data['shared']['rifles'] + team_data['ct']['rifles'] + team_data['t']['rifles'],
+    'grenades': team_data['shared']['grenades'] + team_data['ct']['grenades'] + team_data['t']['grenades']
+}
+
+def clear_view():
+    os.system('cls')
+
 def data_fully_populated(user_data):
     """
     Return Dictionary of all information needed so
@@ -116,14 +127,14 @@ def pick_weapon(user_data, team, weapon_type):
     # Data to override user information
     override_info = []
 
-    os.system('cls')
+    clear_view()
     special_options = []
     if weapon_type == 'pistols':
         special_options = team_data[team]['starter-pistols'][:]
     options = team_data['shared'][weapon_type] + team_data[team][weapon_type][:]
     slot = 1
     while True:
-        os.system('cls')
+        clear_view()
         if slot > 5:
             for i, weapon in enumerate(override_info):
                 print(f'{i+1}. {weapon.upper()}')
@@ -168,7 +179,7 @@ def pick_weapon(user_data, team, weapon_type):
 def edit_class(user_data: dict, team: str):
 
     while True:
-        os.system('cls')
+        clear_view()
         print('\t1. Pistols')
         print('\t2. Mid-Tier')
         print('\t3. Rifles')
@@ -199,15 +210,16 @@ def edit_class(user_data: dict, team: str):
     return user_data
 
 def display_data(user_data: dict):
-    os.system('cls')
+    clear_view()
     for team, slots in user_data.items():
         print(f'{team.upper()}')
         for slot in slots:
-            print(f'  {slot}')
+            print(f'   {slot:<9} | ', end='')
             if not user_data[team][slot]:
-                print(f'    UNPOPULATED')
+                print(f'UNPOPULATED', end='')
             for item in user_data[team][slot]:
-                print(f'    {item}')
+                print(f'{item:<22} | ', end='')
+            print()
 
 def rebind(user_data: dict):
     """
@@ -215,7 +227,7 @@ def rebind(user_data: dict):
     """
     print("IMPORTANT! Make sure the weapons you choose are the right number under the right slot!")
     while True:
-        os.system('cls')
+        clear_view()
         print('\t1. Show Weapon Info')
         print('\t2. Edit    CT')
         print('\t3. Edit     T')
@@ -233,9 +245,51 @@ def rebind(user_data: dict):
         elif choice in ["2", "3"]:
             user_data = edit_class(user_data, 'ct' if choice == '2' else 't')
 
-    # Writing any changes the user made
-    with open('./current_weapons_data.json', 'w') as file:
-        json.dump(user_data, file)
+def add_remove_blacklist(blacklist, category):
+    while True:
+        clear_view()
+        for i, weapon in enumerate(categorized_weapons[category]):
+            if weapon in blacklist[category]:
+                print(f'{i+1}. Remove {weapon.upper()}')
+            else:
+                print(f'{i+1}. Add {weapon.upper()}')
+        print(f'Q. Quit')
+        choice = input('\t> ')
+        if choice in [str(i+1) for i in range(len(categorized_weapons[category]))]:
+            
+            # Grabbing the weapon the user specified
+            weapon = categorized_weapons[category][int(choice)-1]
+            
+            # Weapon already blacklisted, remove it from the blacklist
+            if weapon in blacklist[category]:
+                blacklist[category].remove(weapon)
+            # Weapon not in the blacklist, add it
+            else:
+                blacklist[category].append(weapon)
+        
+        # User wants to quit
+        elif choice.lower() == 'q':
+            break
+
+def edit_blacklist(blacklist):
+    while True:
+        clear_view()
+        print('1. Add/Remove Equipment')
+        print('2. Add/Remove Pistols')
+        print('3. Add/Remove Mid-Tiers')
+        print('4. Add/Remove Rifles')
+        print('5. Add/Remove Grenades')
+        print('Q. Quit')
+        choice = input('\t> ')
+        if   choice == '1': add_remove_blacklist(blacklist, 'equipment')
+        elif choice == '2': add_remove_blacklist(blacklist, 'pistols')
+        elif choice == '3': add_remove_blacklist(blacklist, 'mid-tier')
+        elif choice == '4': add_remove_blacklist(blacklist, 'rifles')
+        elif choice == '5': add_remove_blacklist(blacklist, 'grenades')
+        elif choice.lower() == 'q': break
+
+def edit_priority_list(priority_list):
+    pass
 
 def logger():
     """
@@ -252,18 +306,18 @@ def logger():
 
     This also helps if you type the value in the chat bar and enter to submit
     """
-    os.system('cls')
+    clear_view()
     print('You\'re good to go! Go ahead and start playing your game. Here\'s a cheat sheet')
     print("* starts the logging of information, but it's always running")
     print("This includes restarting input in the case of a mistake")
     print("\"k/h\" denote a damaged/broken kevlar and helmet respectively")
     print("[0-9] denote the user's cash pool")
     print("\"l\" denotes if you lived the previous round, modifying prioty buying system")
-    print("+ ends the logger and returns the string of information")
     print("/ ends the program as a whole so you can leave")
     print("\"Enter\" submits your answer and will queue the auto-buyer")
     print("\"Backspace\" removes the last entry in your value.")
     print("This only applies if you have started it with an *")
+    print("This is designed so you can type in chat and enter, but you can do so without chatting!")
     from pynput import keyboard
     class CustomListener():
         def __init__(self):
@@ -337,6 +391,7 @@ def get_possible_items(user_data, current_loadout, team, mode, balance, buy_helm
     """
     # Finding valid categories to buy from
     valid_categories = []
+    blacklist = user_data['blacklist']
     for category in current_loadout:
         if not current_loadout[category]:
             valid_categories.append(category)
@@ -353,7 +408,14 @@ def get_possible_items(user_data, current_loadout, team, mode, balance, buy_helm
 
     valid_buys = {}
     for category in valid_categories:
-        all_items = get_category_items(user_data, team, mode, category)
+        all_items = get_category_items(user_data['teams'], team, mode, category)
+        print(f'Filtering {all_items}')
+        # Removing items on the blacklist
+        for item in all_items[:]:
+            if item in blacklist[category]:
+                all_items.remove(item)
+            else:
+                print(f'{item} not in {blacklist[category]}')
         if category == 'equipment':
             if not buy_helmet and 'kevlar & helmet' in all_items: all_items.remove('kevlar & helmet')
             if not buy_kevlar and 'kevlar vest' in all_items: all_items.remove('kevlar vest')
@@ -450,7 +512,7 @@ def randomize_loop(user_data, team, mode):
 
             # Choosing a random item (weights can be applied later)
             possible_items = get_possible_items(user_data, current_loadout, team, mode, balance, buy_helmet, buy_kevlar, grenade_slots)
-            print(possible_items)
+
             # Broke ass bitch
             if not possible_items: break
 
@@ -487,14 +549,15 @@ def randomize_loop(user_data, team, mode):
             if random.random() > rate: break
         
         # Commence the autobuyer
-        buy_items(user_data, current_loadout, team)
+        time.sleep(.1)
+        buy_items(user_data['teams'], current_loadout, team)
 
 def start_randomizer(user_data):
     
-    unfilled_data = data_fully_populated(user_data)
+    unfilled_data = data_fully_populated(user_data['teams'])
     if unfilled_data:
         print('Team Data Not Filled Out! Please rebind the following and try again.')
-        for team in unfilled_data:
+        for team in unfilled_data["teams"]:
             for weapon_genre in unfilled_data[team]:
                 print(f'{team.upper()} -> {weapon_genre.upper()}')
         input('ok... > ')
@@ -503,7 +566,7 @@ def start_randomizer(user_data):
         main()
         return
 
-    os.system('cls')
+    clear_view()
     while True:
         print("Select A Team")
         print("\t1.   CT")
@@ -513,7 +576,7 @@ def start_randomizer(user_data):
 
         if team in ['t', 'ct', '1', '2']:
             team = 'ct' if team == '1' else 't'
-            os.system('cls')
+            clear_view()
             while True:
                 print("Select A Mode")
                 print("\t1.      Casual")
@@ -527,9 +590,9 @@ def start_randomizer(user_data):
                     randomize_loop(user_data, team, game)
                     if input('Continue Running? (y/n) > ').lower() == 'n':
                         return
-                    os.system('cls')
+                    clear_view()
                     break
-                os.system('cls')
+                clear_view()
                 if game == 'b': break
                 if game == 'q': return
                 else:
@@ -537,7 +600,7 @@ def start_randomizer(user_data):
         
         elif team == 'q': return
         else:
-            os.system('cls')
+            clear_view()
             print('Invalid Choice!')
 
 def find_weapon_slot(user_data, team, category, item_to_compare):
@@ -568,22 +631,39 @@ def buy_items(user_data, purchaseables, team):
     if purchaseables['grenades']:
         press_key('esc')
 
+def save_changes(user_data):
+    # Writing any changes the user made
+    with open('./current_weapons_data.json', 'w') as file:
+        json.dump(user_data, file)
+
 def main():
 
-    os.system('cls')
+    clear_view()
     while True:
+        clear_view()
         user_data = {}
         with open('./current_weapons_data.json', 'r') as file:
             user_data = json.load(file)
         print('1. Rebind Team Layouts')
-        print('2. Start Random Auto-Buyer')
+        print('2. Edit Blacklist')
+        print('3. Edit Priority List')
+        print('4. Start Random Auto-Buyer')
         print('Q. Quit')
         choice = input('Choose an Option -> ').lower()
         if choice == '1': rebind(user_data)
-        elif choice == '2': start_randomizer(user_data)
+        elif choice == '2': edit_blacklist(user_data['blacklist'])
+        elif choice == '3': edit_priority_list(user_data['priority_list'])
+        elif choice == '4': start_randomizer(user_data)
         elif choice == 'q': return
         else:
-            os.system('cls')
             print('Invalid Choice!')
+        save_changes(user_data)
 
 main()
+
+"""
+
+TODO
+Blacklist purchases,🚲
+allow the user to specify minimum purchases, priorities, etc.
+"""
