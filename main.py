@@ -679,4 +679,6 @@ main()
 
 TODO
 allow the user to specify minimum purchases, priorities, etc.
+fix bug where it buys your previous stuff if you say you lived
+fix bug where if you type no money but have a value of l h or k it crashes
 """
