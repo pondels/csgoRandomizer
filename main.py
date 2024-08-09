@@ -489,10 +489,16 @@ def randomize_loop(user_data, team, mode):
         'rifles':    [],
         'grenades':  []
     }
+    previous_loadout = {
+        'equipment': [],
+        'pistols': [],
+        'mid-tier': [],
+        'rifles': [],
+        'grenades': []
+        }
     while True:
         # User value = money and data regarding what they can afford
         user_value = logger()
-        
 
         # No input detected
         if len(user_value) <= 1: continue
@@ -509,7 +515,11 @@ def randomize_loop(user_data, team, mode):
         
         # Reset current loadout if they didn't live
         if not lived:
-            current_loadout = {key: [] for key in current_loadout}
+            previous_loadout = {category: [] for category in previous_loadout}
+        else:
+            # Place items from the previous loadout into the current loadout
+            for category in previous_loadout:
+                current_loadout[category] = [item for item in previous_loadout[category]]
 
         rates = [0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
         if mode == 'casual': rates = rates[:6]
@@ -562,9 +572,22 @@ def randomize_loop(user_data, team, mode):
             # No more buying :(
             if random.random() > rate: break
 
+        # Remove items in previous loadout from the current loadout
+        for category in previous_loadout:
+            for item in previous_loadout[category]:
+                current_loadout[category].remove(item)
+
         # Commence the autobuyer
         time.sleep(.1)
         buy_items(user_data['teams'], current_loadout, team)
+
+        # Adding current loadout items into the previous loadout
+        for category in current_loadout:
+            for item in current_loadout[category]:
+                previous_loadout[category].append(item)
+
+        # Clear the current loadout
+        current_loadout = {key: [] for key in current_loadout}
 
 def start_randomizer(user_data):
     
