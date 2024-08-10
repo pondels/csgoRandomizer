@@ -526,10 +526,16 @@ def randomize_loop(user_data, team, mode):
             for category in previous_loadout:
                 current_loadout[category] = [item for item in previous_loadout[category]]
 
-        rates = [0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
-        if mode == 'casual': rates = rates[:6]
-        elif team == 'ct': rates = rates[:9]
-        elif team == 't': rates = rates[:8]
+        # Temporary fix to never buying grenades even if you use them
+        # TODO Make a better interface for determining grenade purchasing
+        current_loadout['grenades'] = []
+
+        # Adjusting rates based on what the user currently has
+        rates = [1.0, 0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35]
+        slots_taken = sum([len(current_loadout[category]) for category in current_loadout])
+        if mode == 'casual': rates = rates[:6-(slots_taken)]
+        elif team == 'ct': rates = rates[:9-(slots_taken)]
+        elif team == 't': rates = rates[:8-(slots_taken)]
 
         # Determining max buys based on mode and team
         grenade_slots = 3 if mode == 'casual' else 4
